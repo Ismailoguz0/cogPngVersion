@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Görüntü Overlay</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-geotiff-2@0.2.7/dist/leaflet-geotiff.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #2c3e50;
+            color: white;
+        }
+        
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            left: 60px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            min-width: 300px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        select, button, input {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        
+        button:hover:not(:disabled) {
+            background: #2980b9;
+        }
+        
+        button:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+        }
+        
+        .mode-select {
+            background: #e74c3c;
+        }
+        
+        .mode-select.active {
+            background: #27ae60;
+        }
+        
+        .logs {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            overflow-y: auto;
+            z-index: 1000;
+            font-size: 12px;
+        }
+        
+        .log {
+            margin-bottom: 5px;
+            padding: 3px;
+            border-radius: 3px;
+        }
+        
+        .log.info { background: rgba(52, 152, 219, 0.3); }
+        .log.success { background: rgba(46, 204, 113, 0.3); }
+        .log.error { background: rgba(231, 76, 60, 0.3); }
+        .log.warning { background: rgba(241, 196, 15, 0.3); }
+        
+        .bounds-info {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+        
+        .opacity-control {
+            margin-top: 10px;
+        }
+        
+        .opacity-control input[type="range"] {
+            width: 100%;
+        }
+        
+        .click-instructions {
+            background: rgba(241, 196, 15, 0.2);
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 11px;
+            border-left: 3px solid #f1c40f;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="control-panel">
+        <div class="bounds-info" id="boundsInfo">
+            <strong>Alan Seçim Modu:</strong><br>
+            Görünür alan kullanılacak
+        </div>
+        
+        <div class="click-instructions" id="clickInstructions" style="display: none;">
+            <strong>Manuel Alan Seçimi:</strong><br>
+            1. İlk köşeyi tıklayın<br>
+            2. Karşı köşeyi tıklayın<br>
+            ESC ile iptal edebilirsiniz
+        </div>
+        
+        <button id="toggleModeBtn" class="mode-select">Manuel Alan Seçimi Aktif Et</button>
+        <button id="clearSelectionBtn" style="display: none;">Seçimi Temizle</button>
+                <!-- Mevcut butonlarınızın yanına ekleyin -->
+        <button id="colorMapBtn" onclick="toggleNDVIColorMap()" style="margin: 5px; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            NDVI Renk Haritasını Aç/Kapat
+        </button>
+        
+        <div class="control-group">
+            <label for="productSelect">Görüntü Tipi:</label>
+            <select id="productSelect">
+                <option value="truecolor">True Color</option>
+                <option value="falsecolor">False Color</option>
+                <option value="ndvi">NDVI (Bitki Örtüsü)</option>
+                <option value="moisture">Moisture Index</option>
+                <option value="nir">Yakın Kızılötesi (NIR)</option>
+                <option value="toneMappedTruecolor">Tone Mapped True Color</option>
+                <option value="ndwı">NDWI</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="selectedDate">Görüntü Tarihi:</label>
+            <input type="date" id="selectedDate" value="2024-08-15">
+        </div>
+        
+        <div class="control-group">
+            <label for="cloudCoverage">Max Bulut Oranı (%):</label>
+            <input type="number" id="cloudCoverage" value="15" min="0" max="100">
+        </div>
+        
+        <button id="loadBtn" onclick="loadData()">Veri Yükle</button>
+        
+        <div class="opacity-control">
+            <label for="opacitySlider">Opaklık:</label>
+            <input type="range" id="opacitySlider" min="0" max="100" value="70">
+            <span id="opacityValue">70%</span>
+        </div>
+        
+        <button id="clearBtn">Overlay'leri Temizle</button>
+    </div>
+    
+    <div class="logs" id="logs"></div>
+        <!-- GeoRaster -->
+    <script src="https://unpkg.com/georaster"></script>
+
+    <!-- GeoRasterLayer for Leaflet -->
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+    <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+  <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+
+    <script src="https://unpkg.com/gqeoraster"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Geoblaze kütüphanesi -->
+    <script src="https://cdn.jsdelivr.net/npm/geoblaze@2.8.0/dist/geoblaze.web.min.js"></script>
+
+    <script src="app.js"></script>
+
+    </body>
+</html>

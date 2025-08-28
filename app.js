@@ -210,7 +210,6 @@ function getBboxFromBounds() {
 
 // Başlangıç sınırlarını ayarla
 setTimeout(getCurrentBounds, 100);
-
 async function loadData() {
   const loadBtn = document.getElementById('loadBtn');
   loadBtn.disabled = true;
@@ -221,7 +220,7 @@ async function loadData() {
     const cloudCoverage = document.getElementById('cloudCoverage').value;
     const selectedDate = document.getElementById('selectedDate').value;
     
-    debugLog(`${type.toUpperCase()+cloudCoverage} NDVI görüntüsü yükleniyor...`, 'info');
+    debugLog(`${type.toUpperCase()} görüntüsü yükleniyor...`, 'info');
     
     // Mevcut katmanları temizle
     clearOverlays();
@@ -246,29 +245,28 @@ async function loadData() {
     
     let width, height;
     if (avgDiff < 0.01) {
-      width = 1024; height = 1024;
+      width = 2048; height = 2048;  // Çok küçük alan için yüksek çözünürlük
     } else if (avgDiff < 0.1) {
-      width = 768; height = 768;
+      width = 2048; height = 2048;
     } else {
-      width = 512; height = 512;
+      width = 1024; height = 1024;
     }
+
+    //bu çözünürlük ayarlarına bakılacak hangi çözünürlük daha iyi 
 
     debugLog(`Alan büyüklüğü: ${avgDiff.toFixed(4)} - Çözünürlük: ${width}x${height}`, 'info');
 
-    // Backend'e tile isteği gönder
+    // Backend'e istek gönder
     const requestData = {
       type: type,
       cloudCoverage: parseInt(cloudCoverage),
       selectedDate: selectedDate,
-      bbox: bbox, // [minx, miny, maxx, maxy]
+      bbox: bbox,
       width: width,
-      height: height,
-      manualSelection: manualSelectionMode,
-      expression: "(nir-red)/(nir+red)", // NDVI
-      colormap: "viridis"
+      height: height
     };
     
-    console.log('Backend\'e gönderilen tile isteği:', requestData);
+    console.log('Backend\'e gönderilen istek:', requestData);
 
     const response = await fetch('http://localhost:8000/api/satellite-tiles', {
       method: 'POST',
@@ -285,63 +283,68 @@ async function loadData() {
     }
 
     const data = await response.json();
-    console.log('Backend\'den gelen tile verileri:', data);
+    console.log('Backend\'den gelen yanıt:', data);
 
-    if (!data.success) {
-      throw new Error('Backend\'den başarısız yanıt');
+    // Gelen URL'leri kontrol et
+    if (!data.image_urls || !Array.isArray(data.image_urls)) {
+      throw new Error('Backend\'den geçerli image_urls listesi alınamadı');
     }
 
-    if (data.tiles.length === 0) {
-      debugLog('Bu tarih ve alan için uydu görüntüsü bulunamadı', 'warning');
+    if (data.image_urls.length === 0) {
+      debugLog('Bu tarih ve alan için görüntü bulunamadı', 'warning');
       return;
     }
 
-    // Her tile için Leaflet tile layer oluştur
-    data.tiles.forEach((tileData, index) => {
+    debugLog(`${data.image_urls.length} adet görüntü bulundu`, 'info');
+
+    // Her URL için sırayla image overlay oluştur (2 saniye ara ile)
+    for (let index = 0; index < data.image_urls.length; index++) {
       try {
-        // Leaflet tile layer oluştur
-        const tileLayer = L.tileLayer(tileData.tiles_url, {
-          minZoom: tileData.min_zoom,
-          maxZoom: tileData.max_zoom,
-          opacity: 0.7,
-          attribution: 'ESA Sentinel-2 | Processed by TiTiler',
-          crossOrigin: 'anonymous'
+        const imageUrl = data.image_urls[index];
+        console.log(`Görüntü ${index + 1} yükleniyor:`, imageUrl);
+        
+        // Her görüntü için image overlay oluştur
+        const imageOverlay = L.imageOverlay(imageUrl, [
+          [bbox[1], bbox[0]], // SW corner
+          [bbox[3], bbox[2]]  // NE corner
+        ], {
+          opacity: 0.7, // Her katman biraz daha şeffaf
+          interactive: false,
+          attribution: `Görüntü ${index + 1}/${data.image_urls.length}`
         });
 
-        // Tile layer event'leri
-        tileLayer.on('loading', function() {
-          debugLog(`NDVI Tile ${index+1} yükleniyor...`, 'info');
-        });
+        imageOverlay.addTo(map);
+        currentImageOverlays.push(imageOverlay);
 
-        tileLayer.on('load', function() {
-          debugLog(`NDVI Tile ${index+1} yüklendi (Bulut: %${tileData.cloud_cover.toFixed(1)})`, 'success');
-        });
+        // Sınır katmanını öne getir
+        if (currentBoundsLayer) {
+          currentBoundsLayer.bringToFront();
+        }
 
-        tileLayer.on('tileerror', function() {
-          debugLog(`NDVI Tile ${index+1} yüklenirken hata oluştu`, 'error');
-        });
+        debugLog(`Görüntü ${index + 1}/${data.image_urls.length} eklendi`, 'success');
 
-        // Haritaya ekle
-        tileLayer.addTo(map);
-        currentImageOverlays.push(tileLayer);
+        // Son görüntü değilse 2 saniye bekle
+        if (index < data.image_urls.length - 1) {
+          debugLog('2 saniye bekleniyor...', 'info');
+          loadBtn.textContent = `Yükleniyor... (${index + 1}/${data.image_urls.length})`;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
 
-        // İlk tile için harita merkezini ayarla
-
-      } catch (error) {
-        console.error(`Tile ${index+1} eklenirken hata:`, error);
-        debugLog(`Tile ${index+1} eklenirken hata: ${error.message}`, 'error');
+      } catch (overlayError) {
+        console.error(`Görüntü ${index + 1} eklenirken hata:`, overlayError);
+        debugLog(`Görüntü ${index + 1} eklenirken hata: ${overlayError.message}`, 'error');
       }
-    });
-
-    // Sınır katmanını öne getir
-    if (currentBoundsLayer) {
-      currentBoundsLayer.bringToFront();
     }
 
-    debugLog(`Toplam ${data.tiles.length} NDVI tile katmanı yüklendi`, 'success');
+    debugLog(`Toplam ${currentImageOverlays.length} PNG görüntü katmanı başarıyla yüklendi`, 'success');
+    
+    // İstatistikleri göster
+    if (data.total_count && data.processed_count) {
+      debugLog(`İstatistik: ${data.total_count} STAC item bulundu, ${data.processed_count} tanesi işlendi`, 'info');
+    }
 
   } catch (error) {
-    console.error('Tile yükleme hatası:', error);
+    console.error('Görüntü yükleme hatası:', error);
     debugLog(`Hata: ${error.message}`, 'error');
   } finally {
     loadBtn.disabled = false;
@@ -349,40 +352,30 @@ async function loadData() {
   }
 }
 
-// Overlay'leri temizle - tile layer'lar için güncellenmiş
+// 2 saniye bekleme için yardımcı fonksiyon (alternatif olarak)
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Overlay'leri temizle - güncellenmiş
 function clearOverlays() {
-    currentImageOverlays.forEach(overlay => {
-        if (overlay.remove) {
-            overlay.remove(); // Tile layer için
-        } else {
-            map.removeLayer(overlay); // Image overlay için
+    console.log(`${currentImageOverlays.length} overlay temizleniyor`);
+    
+    currentImageOverlays.forEach((overlay, index) => {
+        try {
+            if (overlay.remove) {
+                overlay.remove(); // Tile layer için
+            } else {
+                map.removeLayer(overlay); // Image overlay için
+            }
+        } catch (error) {
+            console.error(`Overlay ${index + 1} temizlenirken hata:`, error);
         }
     });
+    
     currentImageOverlays = [];
-    debugLog('Tüm tile katmanları temizlendi', 'info');
+    debugLog('Tüm görüntü katmanları temizlendi', 'info');
 }
-
-// Test fonksiyonu
-async function testTileAPI() {
-  try {
-    const response = await fetch('http://localhost:8000/');
-    const data = await response.json();
-    console.log('API Test sonucu:', data);
-    debugLog('Tile API bağlantısı başarılı', 'success');
-  } catch (error) {
-    console.error('API Test hatası:', error);
-    debugLog('Tile API bağlantısı başarısız', 'error');
-  }
-}
-// Overlay'leri temizle
-function clearOverlays() {
-    currentImageOverlays.forEach(overlay => {
-        map.removeLayer(overlay);
-    });
-    currentImageOverlays = [];
-    debugLog('Tüm overlay\'ler temizlendi', 'info');
-}
-
 // Opaklık kontrolü
 function updateOpacity() {
     const opacityValue = document.getElementById('opacitySlider').value;
@@ -405,13 +398,16 @@ document.getElementById('opacitySlider').addEventListener('input', updateOpacity
 
 debugLog('Harita hazır! İstediğiniz alana yakınlaştırıp "Görünür Alan İçin Veri Yükle" butonuna tıklayın.', 'success');
 
-
 /*from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import httpx
 import json
+from folium import Map, raster_layers
+import folium
+
+from urllib.parse import urlencode
 
 app = FastAPI()
 
@@ -424,7 +420,6 @@ app.add_middleware(
 )
 
 
-
 class SatelliteDataRequest(BaseModel):
     type: str
     cloudCoverage: int
@@ -432,31 +427,9 @@ class SatelliteDataRequest(BaseModel):
     bbox: List[float]  # [minx, miny, maxx, maxy]
     width: int
     height: int
-    manualSelection: bool
-    expression: Optional[str]
-    colormap: Optional[str]
 
 
-class TileData(BaseModel):
-    tiles_url: str
-    min_zoom: int
-    max_zoom: int
-    bounds: List[float]
-    center: List[float]
-    cloud_cover: float
-    datetime: str
-    tilejson: dict
-
-
-class SatelliteResponse(BaseModel):
-    success: bool
-    tiles: List[TileData]
-    total_count: int
-    bbox: List[float]
-    parameters: dict
-
-
-@app.post("/api/satellite-tiles", response_model=SatelliteResponse)
+@app.post("/api/satellite-tiles")
 async def get_satellite_tiles(request: SatelliteDataRequest):
     try:
         print(f"Gelen istek: {request}")
@@ -472,11 +445,6 @@ async def get_satellite_tiles(request: SatelliteDataRequest):
             "datetime": f"{start_of_day}/{end_of_day}",
             "bbox": request.bbox,
             "query": {"eo:cloud_cover": {"lt": request.cloudCoverage}}
-            "sortby": [
-                {"field": "datetime", "direction": "desc"}  # En yeni tarih önce
-            ],
-            "limit": 50  # Yeterince fazla sonuç al ki filtreleme yapabilelim
-
         }
 
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -495,50 +463,25 @@ async def get_satellite_tiles(request: SatelliteDataRequest):
 
             print(f"Bulunan STAC item sayısı: {len(features)}")
 
-            if not features:
-                return SatelliteResponse(
-                    success=True,
-                    tiles=[],
-                    total_count=0,
-                    bbox=request.bbox,
-                    parameters={"message": "Bu tarih ve alan için uyda görüntü bulunamadı"}
-                )
+            image_urls = []  # URL'leri saklamak için liste
 
-            tile_data_list = []
-
-
-
+            # Tüm features için döngü
             for i, feature in enumerate(features):
                 try:
-                    # STAC item'ın self URL'ini al
+                    titiler_params = None
                     stac_item_url = None
-                    for link in feature.get('links', []):
-                        if link.get('rel') == 'self':
-                            stac_item_url = link.get('href')
+
+                    # Her feature için self URL'ini bul
+                    for link in feature.get("links", []):
+                        if link.get("rel") == "self":
+                            stac_item_url = link["href"]
                             break
 
                     if not stac_item_url:
-                        print(f"Feature {i + 1} için self link bulunamadı, feature'ı URL olarak encode ediliyor")
-                        # Feature'ı JSON string olarak kullan (fallback)
-                        stac_item_url = json.dumps(feature)
+                        print(f"Feature {i + 1} için self URL bulunamadı, atlanıyor")
+                        continue
 
-                    cloud_cover = feature['properties']['eo:cloud_cover']
-                    datetime_str = feature['properties']['datetime']
-                    geometry = feature.get('geometry', {})
-
-                    # Feature bounds'ını hesapla (eğer varsa)
-                    if geometry and geometry.get('type') == 'Polygon':
-                        coords = geometry['coordinates'][0]
-                        lngs = [coord[0] for coord in coords]
-                        lats = [coord[1] for coord in coords]
-                        feature_bounds = [min(lngs), min(lats), max(lngs), max(lats)]
-                        feature_center = [(min(lats) + max(lats)) / 2, (min(lngs) + max(lngs)) / 2]
-                    else:
-                        feature_bounds = request.bbox
-                        feature_center = [(request.bbox[1] + request.bbox[3]) / 2,
-                                          (request.bbox[0] + request.bbox[2]) / 2]
-                    if(request.type=='ndvi'):
-                    # TiTiler TileJSON endpoint'ine istek gönder
+                    if (request.type == 'ndvi'):
                         titiler_params = {
                             "url": stac_item_url,
                             "expression": "(nir-red)/(nir+red)",
@@ -546,91 +489,72 @@ async def get_satellite_tiles(request: SatelliteDataRequest):
                             "rescale": "-1,1",
                             "minzoom": 8,
                             "maxzoom": 24,
-                            "colormap_name":"viridis"
+                            "colormap_name": "viridis"
                         }
 
-                    elif(request.type=='moisture'):
+                    elif (request.type == 'moisture'):
                         titiler_params = {
-
                             "url": stac_item_url,
                             "minzoom": 0,
                             "maxzoom": 18,
                             "expression": "(nir08-swir16)/(nir08+swir16)",
                             "asset_as_band": True,
                             "rescale": "-1,1",
-                            "colormap_name": "viridis"  # Nem için mavi tonları
+                            "colormap_name": "viridis"
                         }
 
-                    elif(request.type=='truecolor'):
+                    elif (request.type == 'truecolor'):
                         titiler_params = {
                             "url": stac_item_url,
-                            "assets":"visual",
+                            "assets": "visual",
                             "minzoom": 8,
                             "maxzoom": 24,
                         }
 
-                    tilejson_url = f"{titiler_endpoint}/stac/WebMercatorQuad/tilejson.json"
+                    elif(request.type=='falsecolor'):
+                        titiler_params = (
+                            ("url", stac_item_url),
+                            ("assets", "nir"),
+                            ("assets", "red"),
+                            ("assets", "green"),
+                            ("minzoom", 8),
+                            ("maxzoom", 14),
+                            ("rescale", "0,2000"),
+                        )
+                    elif (request.type == 'swir'):
+                        titiler_params = (
+                            ("url", stac_item_url),
+                            ("assets", "swir22"),
+                            ("assets", "nir08"),
+                            ("assets", "red"),
+                            ("minzoom", 8),
+                            ("maxzoom", 14),
+                            ("rescale", "0,2000"),
+                        )
 
-                    print(f"TileJSON isteği gönderiliyor: {tilejson_url}")
+                    if titiler_params:
+                        tilejson_url = f"{titiler_endpoint}/stac/bbox/{request.bbox[0]},{request.bbox[1]},{request.bbox[2]},{request.bbox[3]}/{request.height}x{request.width}.png"
+                        query_string = urlencode(titiler_params)
+                        full_image_url = f"{tilejson_url}?{query_string}"
 
-                    tilejson_response = await client.get(
-                        tilejson_url,
-                        params=titiler_params,
-                        timeout=30.0
-                    )
-#burada hangi veriyi s
-                    if tilejson_response.status_code == 200:
-                        tilejson_data = tilejson_response.json()
-
-                        # TileJSON'dan bilgileri çıkar
-                        tiles_url = tilejson_data["tiles"][0]  # İlk tile URL template
-                        min_zoom = tilejson_data.get("minzoom", 8)
-                        max_zoom = tilejson_data.get("maxzoom", 14)
-                        tile_bounds = tilejson_data.get("bounds", feature_bounds)
-
-                        tile_data_list.append(TileData(
-                            tiles_url=tiles_url,
-                            min_zoom=min_zoom,
-                            max_zoom=max_zoom,
-                            bounds=tile_bounds,
-                            center=feature_center,
-                            cloud_cover=cloud_cover,
-                            datetime=datetime_str,
-                            tilejson=tilejson_data
-                        ))
-
-                        print(f"Tile {i + 1}/{len(features)} başarıyla işlendi")
-                        print(f"Tiles URL: {tiles_url}")
-
-                    else:
-                        print(f"TileJSON hatası tile {i + 1} için: {tilejson_response.status_code}")
-                        print(f"Hata detayı: {tilejson_response.text}")
+                        image_urls.append(full_image_url)
+                        print(f"Feature {i + 1} için URL oluşturuldu")
 
                 except Exception as e:
-                    print(f"Tile {i + 1} işlenirken hata: {str(e)}")
+                    print(f"Feature {i + 1} işlenirken hata: {str(e)}")
                     continue
 
-            return SatelliteResponse(
-                success=True,
-                tiles=tile_data_list,
-                total_count=len(features),
-                bbox=request.bbox,
-                parameters={
-                    "type": request.type,
-                    "cloud_coverage": request.cloudCoverage,
-                    "date": request.selectedDate,
-                    "expression": request.expression,
-                    "colormap": request.colormap,
-                    "processed_count": len(tile_data_list)
-                }
-            )
+            print(f"Toplam {len(image_urls)} URL oluşturuldu")
+
+            return {
+                "image_urls": image_urls,
+            }
 
     except Exception as e:
         print(f"Genel hata: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Test endpoint
 @app.get("/")
 async def root():
     return {"message": "Satellite Tile API çalışıyor"}

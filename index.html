@@ -30,6 +30,12 @@
             padding: 15px;
             border-radius: 10px;
             min-width: 300px;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        
+        /* Panel tamamen gizlenmiş durum */
+        .control-panel.closed {
+            display: none;
         }
         
         .control-group {
@@ -124,11 +130,43 @@
             font-size: 11px;
             border-left: 3px solid #f1c40f;
         }
+
+        /* Küçük ve kompakt aç/kapat butonu */
+        .toggle-panel-btn {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 1100;
+            background: rgba(52, 152, 219, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .toggle-panel-btn:hover {
+            background: rgba(41, 128, 185, 0.9);
+            transform: scale(1.1);
+        }
+
     </style>
 </head>
 <body>
-    <div id="map"></div>
-    
+    <div style="display:flex; height:100vh;">
+        <div id="map" style="flex:1; border-right:2px solid #ccc;"></div>
+        <div id="mapRight" style="flex:1;"></div>
+    </div>
+
+    <button id="togglePanelBtn" class="toggle-panel-btn">☰</button>
+
     <div class="control-panel">
         <div class="bounds-info" id="boundsInfo">
             <strong>Alan Seçim Modu:</strong><br>
@@ -144,7 +182,7 @@
         
         <button id="toggleModeBtn" class="mode-select">Manuel Alan Seçimi Aktif Et</button>
         <button id="clearSelectionBtn" style="display: none;">Seçimi Temizle</button>
-                <!-- Mevcut butonlarınızın yanına ekleyin -->
+        
         <button id="colorMapBtn" onclick="toggleNDVIColorMap()" style="margin: 5px; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
             NDVI Renk Haritasını Aç/Kapat
         </button>
@@ -184,21 +222,48 @@
     </div>
     
     <div class="logs" id="logs"></div>
-        <!-- GeoRaster -->
+    
+    <!-- GeoRaster -->
     <script src="https://unpkg.com/georaster"></script>
-
     <!-- GeoRasterLayer for Leaflet -->
     <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
     <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
-  <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
-
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
     <script src="https://unpkg.com/gqeoraster"></script>
     <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Geoblaze kütüphanesi -->
     <script src="https://cdn.jsdelivr.net/npm/geoblaze@2.8.0/dist/geoblaze.web.min.js"></script>
+    <script src="https://unpkg.com/leaflet.sync/L.Map.Sync.js"></script>
 
-    <script src="app.js"></script>
+    <script>
+        // Panel aç/kapat işlevi
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleBtn = document.getElementById('togglePanelBtn');
+            const panel = document.querySelector('.control-panel');
+            let isPanelOpen = true;
 
-    </body>
+            toggleBtn.addEventListener('click', function() {
+                if (isPanelOpen) {
+                    // Panel kapatma
+                    panel.classList.add('closed');
+                    toggleBtn.innerHTML = '⚙️'; // Panel kapalıyken ayar simgesi
+                    toggleBtn.title = 'Kontrol Panelini Aç';
+                } else {
+                    // Panel açma
+                    panel.classList.remove('closed');
+                    toggleBtn.innerHTML = '✕'; // Panel açıkken X simgesi
+                    toggleBtn.title = 'Kontrol Panelini Kapat';
+                }
+                isPanelOpen = !isPanelOpen;
+            });
+
+            // Başlangıçta panel açık olduğu için X simgesi göster
+            toggleBtn.innerHTML = '✕';
+            toggleBtn.title = 'Kontrol Panelini Kapat';
+        });
+    </script>
+
+    <script src="app.js"></script> 
+</body>
 </html>

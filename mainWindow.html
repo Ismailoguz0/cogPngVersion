@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Görüntü Analizi</title> <!-- ✅ Başlık değişti -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-geotiff-2@0.2.7/dist/leaflet-geotiff.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #2c3e50;
+            color: white;
+        }
+        
+        .map-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .map-section {
+            flex: 1;
+            position: relative;
+        }
+        
+        /* ✅ #map yerine #mapMain */
+        #mapMain {
+            height: 100vh;
+            width: 100%;
+            border-right: 2px solid #34495e;
+        }
+        
+        /* ✅ Sol Panel -> Ana Panel */
+        .control-panel-main {
+            position: absolute;
+            top: 10px;
+            right: 60px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            min-width: 280px;
+            max-width: 320px;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            border: 2px solid #3498db;
+        }
+        
+        /* Panel kapalı durumu */
+        .control-panel-main.closed {
+            display: none;
+        }
+        
+        .panel-header {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        
+        .panel-header.main {
+            background: rgba(52, 152, 219, 0.3);
+            color: #3498db;
+        }
+        
+        .control-group {
+            margin-bottom: 12px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        select, button, input {
+            width: 100%;
+            padding: 6px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        
+        button:hover:not(:disabled) {
+            background: #2980b9;
+        }
+        
+        button:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+        }
+        
+        .mode-select {
+            background: #e74c3c;
+        }
+        
+        .mode-select.active {
+            background: #27ae60;
+        }
+        
+        /* Ana Panel Butonları */
+        .control-panel-main button {
+            background: #3498db;
+        }
+        
+        .control-panel-main button:hover:not(:disabled) {
+            background: #2980b9;
+        }
+        
+        /* ✅ Ana Toggle Butonu */
+        .toggle-panel-btn-main {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1100;
+            background: rgba(52, 152, 219, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .toggle-panel-btn-main:hover {
+            background: rgba(41, 128, 185, 0.9);
+            transform: scale(1.1);
+        }
+
+        /* Split View Butonu */
+        .split-view-btn {
+            position: absolute;
+            top: 65px;
+            right: 15px;
+            z-index: 1100;
+            background: rgba(243, 156, 18, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            text-decoration: none;
+        }
+
+        .split-view-btn:hover {
+            background: rgba(211, 84, 0, 0.9);
+            transform: scale(1.1);
+        }
+        
+        .opacity-control {
+            margin-top: 8px;
+        }
+        
+        .opacity-control input[type="range"] {
+            width: 100%;
+        }
+
+        /* Responsive tasarım */
+        @media (max-width: 768px) {
+            .control-panel-main {
+                min-width: 250px;
+                max-width: 280px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="map-container">
+        <!-- ✅ Ana Harita Bölümü -->
+        <div class="map-section">
+            <div id="mapMain"></div>
+            
+            <!-- ✅ Ana Toggle Butonu -->
+            <button id="togglePanelBtnMain" class="toggle-panel-btn-main" title="Kontrol Panelini Kapat">✕</button>
+            
+            <!-- ✅ Split View Butonu -->
+            <a id="splitViewBtn" 
+               class="split-view-btn" 
+               href="index.html" 
+               title="Split Görünüm Sayfasına Git">🔀</a>
+            
+            <!-- ✅ Ana Kontrol Paneli -->
+            <div class="control-panel-main" id="controlPanelMain">
+                <div class="panel-header main">Ana Harita Kontrolleri</div>
+                
+                <button id="toggleModeBtn" class="mode-select">Manuel Alan Seçimi Aktif Et</button>
+                <button id="clearSelectionBtn" style="display: none;">Seçimi Temizle</button>
+                
+                <div class="control-group">
+                    <label for="productSelectMain">Görüntü Tipi:</label>
+                    <select id="productSelectMain">
+                        <option value="truecolor">True Color</option>
+                        <option value="ndvi">NDVI (Bitki Örtüsü)</option>
+                        <option value="moisture">Moisture Index</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="selectedDateMain">Görüntü Tarihi:</label>
+                    <input type="date" id="selectedDateMain" value="2024-08-15">
+                </div>
+                
+                <div class="control-group">
+                    <label for="cloudCoverageMain">Max Bulut Oranı (%):</label>
+                    <input type="number" id="cloudCoverageMain" value="15" min="0" max="100">
+                </div>
+                
+                <button id="loadBtnMain">Veri Yükle</button>
+                
+                <div class="opacity-control">
+                    <label for="opacitySliderMain">Opaklık:</label>
+                    <input type="range" id="opacitySliderMain" min="0" max="100" value="70">
+                    <span id="opacityValueMain">70%</span>
+                </div>
+                
+                <button id="clearBtnMain">Overlay Temizle</button>
+            </div>
+        </div>
+    </div>
+     
+    <!-- Script Yüklemeleri -->
+    <script src="https://unpkg.com/georaster"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+    <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+    <script src="https://unpkg.com/gqeoraster"></script>
+    <script src="https://cdn.jsdelivr.net/npm/geoblaze@2.8.0/dist/geoblaze.web.min.js"></script>
+    <script src="https://unpkg.com/leaflet.sync/L.Map.Sync.js"></script>
+
+    <script>
+        // Panel kontrol fonksiyonları
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // ✅ Ana Panel Kontrolü
+            const toggleBtnMain = document.getElementById('togglePanelBtnMain');
+            const panelMain = document.getElementById('controlPanelMain');
+            let isPanelMainOpen = true;
+
+            toggleBtnMain.addEventListener('click', function() {
+                if (isPanelMainOpen) {
+                    panelMain.classList.add('closed');
+                    toggleBtnMain.innerHTML = '⚙️';
+                    toggleBtnMain.title = 'Kontrol Panelini Aç';
+                } else {
+                    panelMain.classList.remove('closed');
+                    toggleBtnMain.innerHTML = '✕';
+                    toggleBtnMain.title = 'Kontrol Panelini Kapat';
+                }
+                isPanelMainOpen = !isPanelMainOpen;
+            });
+
+            // Başlangıçta panel açık
+            toggleBtnMain.innerHTML = '✕';
+            toggleBtnMain.title = 'Kontrol Panelini Kapat';
+        });
+    </script>
+
+    <script src="mainWindowapp.js"></script> 
+</body>
+</html>

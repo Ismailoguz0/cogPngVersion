@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sentinel Görüntü Overlay</title>
+    <title>Çift Sentinel Görüntü Overlay</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-geotiff-2@0.2.7/dist/leaflet-geotiff.min.js"></script>
@@ -16,44 +16,100 @@
             color: white;
         }
         
+        .map-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .map-section {
+            flex: 1;
+            position: relative;
+        }
+        
         #map {
+            height: 100vh;
+            width: 100%;
+            border-right: 2px solid #34495e;
+        }
+        
+        #mapRight {
             height: 100vh;
             width: 100%;
         }
         
-        .control-panel {
+        /* Sol Panel Stilleri */
+        .control-panel-left {
             position: absolute;
             top: 10px;
-            left: 60px;
+            right: 60px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             padding: 15px;
             border-radius: 10px;
-            min-width: 300px;
+            min-width: 280px;
+            max-width: 320px;
             transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            border: 2px solid #3498db;
         }
         
-        /* Panel tamamen gizlenmiş durum */
-        .control-panel.closed {
+        /* Sağ Panel Stilleri */
+        .control-panel-right {
+            position: absolute;
+            top: 10px;
+            right: 60px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            min-width: 280px;
+            max-width: 320px;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            border: 2px solid #e74c3c;
+        }
+        
+        /* Panel kapalı durumları */
+        .control-panel-left.closed,
+        .control-panel-right.closed {
             display: none;
         }
         
-        .control-group {
+        .panel-header {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
             margin-bottom: 15px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        
+        .panel-header.left {
+            background: rgba(52, 152, 219, 0.3);
+            color: #3498db;
+        }
+        
+        .panel-header.right {
+            background: rgba(231, 76, 60, 0.3);
+            color: #e74c3c;
+        }
+        
+        .control-group {
+            margin-bottom: 12px;
         }
         
         label {
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
+            font-size: 12px;
         }
         
         select, button, input {
             width: 100%;
-            padding: 8px;
+            padding: 6px;
             border: none;
             border-radius: 5px;
             margin-bottom: 5px;
+            font-size: 12px;
         }
         
         button {
@@ -81,61 +137,29 @@
             background: #27ae60;
         }
         
-        .logs {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            right: 10px;
-            height: 150px;
-            background: rgba(0, 0, 0, 0.9);
-            border-radius: 10px;
-            padding: 10px;
-            overflow-y: auto;
-            z-index: 1000;
-            font-size: 12px;
+        /* Sol Panel Butonları */
+        .control-panel-left button {
+            background: #3498db;
         }
         
-        .log {
-            margin-bottom: 5px;
-            padding: 3px;
-            border-radius: 3px;
+        .control-panel-left button:hover:not(:disabled) {
+            background: #2980b9;
         }
         
-        .log.info { background: rgba(52, 152, 219, 0.3); }
-        .log.success { background: rgba(46, 204, 113, 0.3); }
-        .log.error { background: rgba(231, 76, 60, 0.3); }
-        .log.warning { background: rgba(241, 196, 15, 0.3); }
-        
-        .bounds-info {
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            font-size: 11px;
+        /* Sağ Panel Butonları */
+        .control-panel-right button {
+            background: #e74c3c;
         }
         
-        .opacity-control {
-            margin-top: 10px;
+        .control-panel-right button:hover:not(:disabled) {
+            background: #c0392b;
         }
         
-        .opacity-control input[type="range"] {
-            width: 100%;
-        }
-        
-        .click-instructions {
-            background: rgba(241, 196, 15, 0.2);
-            padding: 8px;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            font-size: 11px;
-            border-left: 3px solid #f1c40f;
-        }
-
-        /* Küçük ve kompakt aç/kapat butonu */
-        .toggle-panel-btn {
+        /* Sol Toggle Butonu */
+        .toggle-panel-btn-left {
             position: absolute;
             top: 15px;
-            left: 15px;
+            right: 15px;
             z-index: 1100;
             background: rgba(52, 152, 219, 0.9);
             color: white;
@@ -152,116 +176,263 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
         
-        .toggle-panel-btn:hover {
+        .toggle-panel-btn-left:hover {
             background: rgba(41, 128, 185, 0.9);
             transform: scale(1.1);
         }
 
+        /* Sağ Toggle Butonu */
+        .toggle-panel-btn-right {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1100;
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .toggle-panel-btn-right:hover {
+            background: rgba(192, 57, 43, 0.9);
+            transform: scale(1.1);
+        }
+        
+        .logs {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            overflow-y: auto;
+            z-index: 1000;
+            font-size: 11px;
+        }
+        
+        .log {
+            margin-bottom: 5px;
+            padding: 3px;
+            border-radius: 3px;
+        }
+        
+        .log.info { background: rgba(52, 152, 219, 0.3); }
+        .log.success { background: rgba(46, 204, 113, 0.3); }
+        .log.error { background: rgba(231, 76, 60, 0.3); }
+        .log.warning { background: rgba(241, 196, 15, 0.3); }
+        
+        
+        .opacity-control {
+            margin-top: 8px;
+        }
+        
+        .opacity-control input[type="range"] {
+            width: 100%;
+        }
+        
+        .click-instructions {
+            background: rgba(241, 196, 15, 0.2);
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 10px;
+            border-left: 3px solid #f1c40f;
+        }
+
+        /* Genel Kontroller - Merkezi */
+        .general-controls {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1200;
+            background: rgba(44, 62, 80, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #f39c12;
+            min-width: 300px;
+        }
+        
+        .general-controls .panel-header {
+            background: rgba(243, 156, 18, 0.3);
+            color: #f39c12;
+        }
+
+        /* Responsive tasarım */
+        @media (max-width: 768px) {
+            .control-panel-left,
+            .control-panel-right {
+                min-width: 250px;
+                max-width: 280px;
+            }
+            
+            .logs {
+                height: 100px;
+                font-size: 10px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div style="display:flex; height:100vh;">
-        <div id="map" style="flex:1; border-right:2px solid #ccc;"></div>
-        <div id="mapRight" style="flex:1;"></div>
+    <div class="map-container">
+        <!-- Sol Harita Bölümü -->
+        <div class="map-section">
+            <div id="map"></div>
+            
+            <!-- Sol Toggle Butonu -->
+            <button id="togglePanelBtnLeft" class="toggle-panel-btn-left">✕</button>
+            
+            <!-- Sol Kontrol Paneli -->
+            <div class="control-panel-left" id="controlPanelLeft">
+                <button id="toggleModeBtn" class="mode-select">Manuel Alan Seçimi Aktif Et</button>
+                <button id="clearSelectionBtn" style="display: none;">Seçimi Temizle</button>
+                
+                <div class="control-group">
+                    <label for="productSelectLeft">Görüntü Tipi:</label>
+                    <select id="productSelectLeft">
+                        <option value="truecolor">True Color</option>
+                        <option value="ndvi">NDVI (Bitki Örtüsü)</option>
+                        <option value="moisture">Moisture Index</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="selectedDateLeft">Görüntü Tarihi:</label>
+                    <input type="date" id="selectedDateLeft" value="2024-08-15">
+                </div>
+                
+                <div class="control-group">
+                    <label for="cloudCoverageLeft">Max Bulut Oranı (%):</label>
+                    <input type="number" id="cloudCoverageLeft" value="15" min="0" max="100">
+                </div>
+                
+                <button id="loadBtn">Sol Harita Veri Yükle</button>
+                
+                <div class="opacity-control">
+                    <label for="opacitySliderLeft">Opaklık:</label>
+                    <input type="range" id="opacitySliderLeft" min="0" max="100" value="70">
+                    <span id="opacityValueLeft">70%</span>
+                </div>
+                
+                <button id="clearBtnLeft">Sol Overlay Temizle</button>
+            </div>
+        </div>
+        
+        <!-- Sağ Harita Bölümü -->
+        <div class="map-section">
+            <div id="mapRight"></div>
+            
+            <!-- Sağ Toggle Butonu -->
+            <button id="togglePanelBtnRight" class="toggle-panel-btn-right">✕</button>
+            
+            <!-- Sağ Kontrol Paneli -->
+            <div class="control-panel-right" id="controlPanelRight">
+                
+                <div class="control-group">
+                    <label for="productSelectRight">Görüntü Tipi:</label>
+                    <select id="productSelectRight">
+                        <option value="truecolor">True Color</option>
+                        <option value="ndvi">NDVI (Bitki Örtüsü)</option>
+                        <option value="moisture">Moisture Index</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="selectedDateRight">Görüntü Tarihi:</label>
+                    <input type="date" id="selectedDateRight" value="2024-08-15">
+                </div>
+                
+                <div class="control-group">
+                    <label for="cloudCoverageRight">Max Bulut Oranı (%):</label>
+                    <input type="number" id="cloudCoverageRight" value="15" min="0" max="100">
+                </div>
+                
+                <button id="loadBtnRight">Sağ Harita Veri Yükle</button>
+                
+                <div class="opacity-control">
+                    <label for="opacitySliderRight">Opaklık:</label>
+                    <input type="range" id="opacitySliderRight" min="0" max="100" value="70">
+                    <span id="opacityValueRight">70%</span>
+                </div>
+                
+                <button id="clearBtnRight">Sağ Overlay Temizle</button>
+            </div>
+        </div>
     </div>
 
-    <button id="togglePanelBtn" class="toggle-panel-btn">☰</button>
 
-    <div class="control-panel">
-        <div class="bounds-info" id="boundsInfo">
-            <strong>Alan Seçim Modu:</strong><br>
-            Görünür alan kullanılacak
-        </div>
-        
-        <div class="click-instructions" id="clickInstructions" style="display: none;">
-            <strong>Manuel Alan Seçimi:</strong><br>
-            1. İlk köşeyi tıklayın<br>
-            2. Karşı köşeyi tıklayın<br>
-            ESC ile iptal edebilirsiniz
-        </div>
-        
-        <button id="toggleModeBtn" class="mode-select">Manuel Alan Seçimi Aktif Et</button>
-        <button id="clearSelectionBtn" style="display: none;">Seçimi Temizle</button>
-        
-        <button id="colorMapBtn" onclick="toggleNDVIColorMap()" style="margin: 5px; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            NDVI Renk Haritasını Aç/Kapat
-        </button>
-        
-        <div class="control-group">
-            <label for="productSelect">Görüntü Tipi:</label>
-            <select id="productSelect">
-                <option value="truecolor">True Color</option>
-                <option value="falsecolor">False Color</option>
-                <option value="ndvi">NDVI (Bitki Örtüsü)</option>
-                <option value="moisture">Moisture Index</option>
-                <option value="swir">SWIR</option>
-                <option value="toneMappedTruecolor">Tone Mapped True Color</option>
-                <option value="ndwı">NDWI</option>
-            </select>
-        </div>
-        
-        <div class="control-group">
-            <label for="selectedDate">Görüntü Tarihi:</label>
-            <input type="date" id="selectedDate" value="2024-08-15">
-        </div>
-        
-        <div class="control-group">
-            <label for="cloudCoverage">Max Bulut Oranı (%):</label>
-            <input type="number" id="cloudCoverage" value="15" min="0" max="100">
-        </div>
-        
-        <button id="loadBtn" onclick="loadData()">Veri Yükle</button>
-        
-        <div class="opacity-control">
-            <label for="opacitySlider">Opaklık:</label>
-            <input type="range" id="opacitySlider" min="0" max="100" value="70">
-            <span id="opacityValue">70%</span>
-        </div>
-        
-        <button id="clearBtn">Overlay'leri Temizle</button>
-    </div>
     
-    <div class="logs" id="logs"></div>
-    
-    <!-- GeoRaster -->
+    <!-- Script Yüklemeleri -->
     <script src="https://unpkg.com/georaster"></script>
-    <!-- GeoRasterLayer for Leaflet -->
     <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
     <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
-    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
     <script src="https://unpkg.com/gqeoraster"></script>
-    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Geoblaze kütüphanesi -->
     <script src="https://cdn.jsdelivr.net/npm/geoblaze@2.8.0/dist/geoblaze.web.min.js"></script>
     <script src="https://unpkg.com/leaflet.sync/L.Map.Sync.js"></script>
 
     <script>
-        // Panel aç/kapat işlevi
+        // Panel kontrol fonksiyonları
         document.addEventListener('DOMContentLoaded', function() {
-            const toggleBtn = document.getElementById('togglePanelBtn');
-            const panel = document.querySelector('.control-panel');
-            let isPanelOpen = true;
+            
+            // Sol Panel Kontrolü
+            const toggleBtnLeft = document.getElementById('togglePanelBtnLeft');
+            const panelLeft = document.getElementById('controlPanelLeft');
+            let isPanelLeftOpen = true;
 
-            toggleBtn.addEventListener('click', function() {
-                if (isPanelOpen) {
-                    // Panel kapatma
-                    panel.classList.add('closed');
-                    toggleBtn.innerHTML = '⚙️'; // Panel kapalıyken ayar simgesi
-                    toggleBtn.title = 'Kontrol Panelini Aç';
+            toggleBtnLeft.addEventListener('click', function() {
+                if (isPanelLeftOpen) {
+                    panelLeft.classList.add('closed');
+                    toggleBtnLeft.innerHTML = '⚙️';
+                    toggleBtnLeft.title = 'Sol Kontrol Panelini Aç';
                 } else {
-                    // Panel açma
-                    panel.classList.remove('closed');
-                    toggleBtn.innerHTML = '✕'; // Panel açıkken X simgesi
-                    toggleBtn.title = 'Kontrol Panelini Kapat';
+                    panelLeft.classList.remove('closed');
+                    toggleBtnLeft.innerHTML = '✕';
+                    toggleBtnLeft.title = 'Sol Kontrol Panelini Kapat';
                 }
-                isPanelOpen = !isPanelOpen;
+                isPanelLeftOpen = !isPanelLeftOpen;
             });
 
-            // Başlangıçta panel açık olduğu için X simgesi göster
-            toggleBtn.innerHTML = '✕';
-            toggleBtn.title = 'Kontrol Panelini Kapat';
+            // Sağ Panel Kontrolü
+            const toggleBtnRight = document.getElementById('togglePanelBtnRight');
+            const panelRight = document.getElementById('controlPanelRight');
+            let isPanelRightOpen = true;
+
+            toggleBtnRight.addEventListener('click', function() {
+                if (isPanelRightOpen) {
+                    panelRight.classList.add('closed');
+                    toggleBtnRight.innerHTML = '⚙️';
+                    toggleBtnRight.title = 'Sağ Kontrol Panelini Aç';
+                } else {
+                    panelRight.classList.remove('closed');
+                    toggleBtnRight.innerHTML = '✕';
+                    toggleBtnRight.title = 'Sağ Kontrol Panelini Kapat';
+                }
+                isPanelRightOpen = !isPanelRightOpen;
+            });
+
+            // Başlangıçta paneller açık
+            toggleBtnLeft.innerHTML = '✕';
+            toggleBtnLeft.title = 'Sol Kontrol Panelini Kapat';
+            toggleBtnRight.innerHTML = '✕';
+            toggleBtnRight.title = 'Sağ Kontrol Panelini Kapat';
         });
+
+        // NDVI Renk Haritası Toggle Fonksiyonu (placeholder)
+        function toggleNDVIColorMap() {
+            console.log('NDVI Renk Haritası toggle edildi');
+            // Bu fonksiyon app.js dosyasında implement edilecek
+        }
     </script>
 
     <script src="app.js"></script> 
